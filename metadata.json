@@ -1,0 +1,6 @@
+{
+  "name": "Marginalia - Personal Book Club & Knowledge Vault",
+  "description": "A collaborative book club and reading library to record takeaways from podcasts, articles, and books, explore deep reflections, synthesize insights with AI, and share curated recommendations.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

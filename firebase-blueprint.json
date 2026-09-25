@@ -1,0 +1,50 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile in the vault",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "User unique identifier" },
+        "email": { "type": "string", "description": "User email address" },
+        "displayName": { "type": "string", "description": "Display name or reader handle" },
+        "createdAt": { "type": "string", "description": "Account creation timestamp" }
+      },
+      "required": ["uid", "email"]
+    },
+    "Entry": {
+      "title": "Entry",
+      "description": "A recorded book, podcast, article, or content source with reflections and takeaways",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique entry identifier" },
+        "userId": { "type": "string", "description": "Owner user ID" },
+        "title": { "type": "string", "description": "Title of the work" },
+        "author": { "type": "string", "description": "Author, host, or creator" },
+        "medium": { "type": "string", "description": "Format: book, podcast, article, essay, video" },
+        "coverUrl": { "type": "string", "description": "Optional cover art URL" },
+        "dateLogged": { "type": "string", "description": "Date logged YYYY-MM-DD" },
+        "rating": { "type": "number", "description": "Rating out of 5" },
+        "tags": { "type": "array", "description": "Thematic tags for classification" },
+        "status": { "type": "string", "description": "Reading/listening status" },
+        "whatImThinking": { "type": "string", "description": "Takeaways, aha moments, and reflections" },
+        "whyILikedIt": { "type": "string", "description": "Resonance, standout stories, why you liked it" },
+        "howIllUseItGoingForward": { "type": "string", "description": "Actionable rules, habits, business decisions" },
+        "clubDiscussion": { "type": "array", "description": "Guided Q&A reflection notes" },
+        "quotes": { "type": "array", "description": "Verbatim quotes and timestamps" },
+        "synthesis": { "type": "object", "description": "AI-generated executive synthesis" }
+      },
+      "required": ["id", "userId", "title", "medium", "dateLogged"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profile document"
+    },
+    "/users/{userId}/entries/{entryId}": {
+      "schema": "Entry",
+      "description": "Collection of private content entries, reflections, and insights for a user"
+    }
+  }
+}
