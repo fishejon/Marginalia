@@ -52,6 +52,35 @@ export async function removeUserEntry(userId: string, entryId: string): Promise<
   await deleteDoc(entryDocRef);
 }
 
+// Firestore caps a single batch at 500 writes.
+const BATCH_WRITE_LIMIT = 450;
+
+/**
+ * Copies entries recorded in guest mode into the signed-in user's cloud vault.
+ *
+ * Writes are keyed by the entry's existing id and use `merge`, so re-running this
+ * for the same entries is idempotent rather than duplicating them. Throws if any
+ * chunk fails, so the caller can keep the local copy instead of clearing it.
+ */
+export async function migrateGuestEntriesToCloud(
+  userId: string,
+  guestEntries: Entry[]
+): Promise<number> {
+  if (guestEntries.length === 0) return 0;
+
+  for (let i = 0; i < guestEntries.length; i += BATCH_WRITE_LIMIT) {
+    const chunk = guestEntries.slice(i, i + BATCH_WRITE_LIMIT);
+    const batch = writeBatch(db);
+    chunk.forEach((entry) => {
+      const docRef = doc(db, 'users', userId, 'entries', entry.id);
+      batch.set(docRef, { ...entry, userId }, { merge: true });
+    });
+    await batch.commit();
+  }
+
+  return guestEntries.length;
+}
+
 export async function loadSampleCanonToFirestore(userId: string): Promise<void> {
   const batch = writeBatch(db);
   INITIAL_ENTRIES.forEach((sample) => {

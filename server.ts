@@ -21,32 +21,20 @@ const ai = apiKey
     })
   : null;
 
+// Returned when an AI-generating endpoint is called without a configured key.
+// These endpoints must never invent plausible-looking output: a user cannot tell
+// fabricated filler from real synthesis, which silently poisons their vault.
+const MISSING_KEY_MESSAGE =
+  'AI features are unavailable because GEMINI_API_KEY is not configured on the server. ' +
+  'Set it in .env.local for local development, or as an environment variable on your host, then restart.';
+
 // Endpoint 1: Generate custom provocative book club reflection questions
 app.post('/api/gemini/reflection-prompts', async (req, res) => {
   try {
     const { title, author, medium = 'book', whatImThinking = '', whyILikedIt = '', howIllUseItGoingForward = '' } = req.body;
 
     if (!ai) {
-      // Fallback if API key is not present
-      return res.json({
-        questions: [
-          {
-            id: 'p-1',
-            question: `What is the single most counter-intuitive or uncomfortable claim made in "${title}", and do you personally agree with it?`,
-            context: 'Challenging core assumptions'
-          },
-          {
-            id: 'p-2',
-            question: `If you could only implement one strict rule or habit from "${title}" into your routine for the next 90 days, which would it be?`,
-            context: 'Immediate practical application'
-          },
-          {
-            id: 'p-3',
-            question: `How does the perspective of ${author || 'the author'} conflict with or enhance your prior beliefs on this topic?`,
-            context: 'Philosophical synthesis'
-          }
-        ]
-      });
+      return res.status(503).json({ error: 'AI unavailable', message: MISSING_KEY_MESSAGE });
     }
 
     const prompt = `You are an insightful curator and facilitator for a high-caliber personal book club.
@@ -114,38 +102,7 @@ app.post('/api/gemini/synthesize', async (req, res) => {
     const { title, author, medium = 'book', whatImThinking, whyILikedIt, howIllUseItGoingForward, quotes = [] } = req.body;
 
     if (!ai) {
-      // Intelligent fallback
-      return res.json({
-        thesis: `"${title}" by ${author || 'the author'} presents a transformative framework that challenges conventional intuition and demands disciplined, intentional execution.`,
-        keyPrinciples: [
-          `Core Architecture: Systematic approaches outperform willpower and sporadic motivation.`,
-          `Reflective Awareness: Conscious examination of assumptions is essential before high-stakes decisions.`,
-          `Compound Application: Small, consistent behavioral adjustments yield outsized long-term advantages.`
-        ],
-        actionPlaybook: [
-          {
-            id: 'act-1',
-            action: `Audit current workflow for alignment with the primary lessons from ${title}.`,
-            category: 'Immediate'
-          },
-          {
-            id: 'act-2',
-            action: `Establish a recurring review ritual to verify retention and operational adherence.`,
-            category: 'Habit'
-          },
-          {
-            id: 'act-3',
-            action: `Incorporate key principles into upcoming business or personal decision matrices.`,
-            category: 'Strategic Decision'
-          }
-        ],
-        recommendationPitch: {
-          whyRecommend: `Provides clear mental models and compelling arguments that cut through noise.`,
-          whoShouldRead: `Anyone navigating complex decisions, personal growth, or leadership challenges.`,
-          ratingBlurb: `A thought-provoking and practically applicable addition to your personal intellectual canon.`
-        },
-        synthesizedAt: new Date().toISOString()
-      });
+      return res.status(503).json({ error: 'AI unavailable', message: MISSING_KEY_MESSAGE });
     }
 
     const quotesText = quotes.map((q: any) => `"${q.text}" (${q.location || ''})`).join('\n');
@@ -234,23 +191,7 @@ app.post('/api/gemini/query-repository', async (req, res) => {
     }
 
     if (!ai) {
-      // Fallback response matching query
-      const matching = libraryItems.slice(0, 2);
-      return res.json({
-        answer: `Based on your library of ${libraryItems.length} sources, here is what your reading notes counsel for "${query}":\n\n1. **Focus on Systems and Foundations**: From your notes on Atomic Habits and Thinking, Fast and Slow, the key is to isolate the underlying friction point rather than trying to power through with willpower.\n2. **Examine Cognitive Biases**: Daniel Kahneman warns against WYSIATI (What You See Is All There Is). Gather base-rate evidence before locking into a conclusion.\n3. **Protect Your Margin**: Morgan Housel emphasizes that maintaining flexibility and room for error provides the emotional resilience needed to solve volatile problems.`,
-        consultationSummary: `Synthesized advice drawing across ${matching.map((m: any) => m.title).join(' and ')}.`,
-        citedEntries: matching.map((m: any) => ({
-          id: m.id,
-          title: m.title,
-          author: m.author,
-          relevance: `Directly relevant regarding behavioral systems and decision-making discipline.`
-        })),
-        suggestedNextSteps: [
-          'Run a 15-minute Premortem before committing to the next step.',
-          'Audit your environmental friction points to make the correct action obvious and easy.',
-          'Schedule an ultradian 90-minute focus block with zero digital distractions.'
-        ]
-      });
+      return res.status(503).json({ error: 'AI unavailable', message: MISSING_KEY_MESSAGE });
     }
 
     // Build library digest for context
@@ -391,14 +332,16 @@ app.post('/api/gemini/book-lookup', async (req, res) => {
     let detectedCover: string | undefined = undefined;
 
     if (!ai) {
+      // Without a key we cannot identify the work, but cover lookup is a real API
+      // call, so return only genuinely-sourced data and invent nothing.
       detectedCover = await fetchCoverThumbnail(query);
       return res.json({
         title: query,
         author: '',
         medium: 'book',
         coverUrl: detectedCover,
-        suggestedTags: ['Non-Fiction', 'Insights'],
-        briefContext: `A valuable work exploring fundamental concepts and actionable lessons.`
+        suggestedTags: [],
+        briefContext: ''
       });
     }
 
@@ -529,13 +472,15 @@ app.post('/api/gemini/fetch-url-source', async (req, res) => {
     }
 
     if (!ai) {
+      // Unlike the generative endpoints, everything above came from the page's own
+      // metadata, so it is safe to return. Only AI-authored fields are withheld.
       return res.json({
         title: fetchedTitle || url,
-        author: fetchedAuthor || 'Online Creator',
+        author: fetchedAuthor || '',
         medium: mediumHint,
         coverUrl: fetchedImage || undefined,
-        suggestedTags: ['Online Resource'],
-        briefContext: fetchedDescription || 'Online source extracted from link.',
+        suggestedTags: [],
+        briefContext: fetchedDescription || '',
       });
     }
 
@@ -614,18 +559,7 @@ app.post('/api/gemini/socratic-chat', async (req, res) => {
     } = req.body;
 
     if (!ai) {
-      if (mode === 'extract_pillars') {
-        return res.json({
-          whatImThinking: 'Primary insights centered on foundational behavioral mechanisms and cognitive clarity.',
-          whyILikedIt: 'Clear, compelling explanations that challenge conventional intuition.',
-          howIllUseItGoingForward: 'Implement a structured review ritual and design environment to reduce friction.',
-          suggestedTags: ['Decision Making', 'Systems', 'Focus'],
-        });
-      }
-
-      return res.json({
-        reply: `That is an interesting angle on "${workTitle}". What led you to that conclusion, and what is the strongest counter-argument someone with opposing views might make?`,
-      });
+      return res.status(503).json({ error: 'AI unavailable', message: MISSING_KEY_MESSAGE });
     }
 
     if (mode === 'extract_pillars') {
@@ -716,31 +650,7 @@ app.post('/api/gemini/smart-recommendations', async (req, res) => {
     }).join('\n');
 
     if (!ai) {
-      return res.json({
-        shelfSynthesis: 'Your vault emphasizes cognitive decision-making, systems architecture, and sustainable mental performance.',
-        recommendations: [
-          {
-            id: 'rec-1',
-            title: 'Superforecasting: The Art and Science of Prediction',
-            author: 'Philip E. Tetlock & Dan Gardner',
-            medium: 'book',
-            coverUrl: 'https://covers.openlibrary.org/b/id/8314138-L.jpg',
-            whyRecommended: 'Extends Kahneman’s heuristics into rigorous probabilistic forecasting and decision hygiene in business.',
-            thematicConnection: 'Complements Thinking, Fast and Slow by showing how top forecasters calibrate uncertainty.',
-            tags: ['Decision Making', 'Forecasting', 'Strategy'],
-          },
-          {
-            id: 'rec-2',
-            title: 'Acquired: Standard Oil & The Seven Sisters',
-            author: 'Ben Gilbert & David Rosenthal',
-            medium: 'podcast',
-            whyRecommended: 'A masterclass in business moats, capital allocation, and industrial durability.',
-            thematicConnection: 'Pairs with The Psychology of Money to analyze compounding and monopoly economics.',
-            tags: ['Business Models', 'Strategy', 'Investing'],
-          }
-        ],
-        groundingSources: []
-      });
+      return res.status(503).json({ error: 'AI unavailable', message: MISSING_KEY_MESSAGE });
     }
 
     // As instructed by the tool specification: Use gemini-3.5-flash (with googleSearch tool)

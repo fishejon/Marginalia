@@ -6,10 +6,12 @@ import {
   saveUserEntry,
   removeUserEntry,
   loadSampleCanonToFirestore,
+  migrateGuestEntriesToCloud,
 } from './utils/firestoreService';
 import {
   loadEntries,
   saveEntries,
+  clearLocalEntries,
   resetToDemoEntries,
   exportEntriesAsJson,
 } from './utils/storage';
@@ -47,6 +49,9 @@ export default function App() {
   const [authLoading, setAuthLoading] = useState(true);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isSmartRecsOpen, setIsSmartRecsOpen] = useState(false);
+  const [migrationNotice, setMigrationNotice] = useState<
+    { tone: 'success' | 'error'; text: string } | null
+  >(null);
 
   // Entries in vault
   const [entries, setEntries] = useState<Entry[]>(() => loadEntries());
@@ -84,18 +89,57 @@ export default function App() {
       return;
     }
 
-    // Subscribe to Firestore entries for this authenticated user
-    const unsubscribe = subscribeToUserEntries(
-      user.uid,
-      (cloudEntries) => {
-        setEntries(cloudEntries);
-      },
-      (err) => {
-        console.warn('Could not read Firestore entries, falling back to local:', err);
-      }
-    );
+    let cancelled = false;
+    let unsubscribe: (() => void) | undefined;
 
-    return () => unsubscribe();
+    (async () => {
+      // Anything recorded before signing in lives only in localStorage. The Firestore
+      // subscription below replaces state wholesale, so migrate first or it is lost.
+      const guestEntries = loadEntries();
+      if (guestEntries.length > 0) {
+        try {
+          await migrateGuestEntriesToCloud(user.uid, guestEntries);
+          // Only clear local once the cloud write has actually committed.
+          clearLocalEntries();
+          if (!cancelled) {
+            setMigrationNotice({
+              tone: 'success',
+              text: `Moved ${guestEntries.length} ${
+                guestEntries.length === 1 ? 'entry' : 'entries'
+              } recorded in guest mode into your cloud vault.`,
+            });
+          }
+        } catch (err) {
+          console.error('Failed to migrate guest entries; keeping the local copy:', err);
+          if (!cancelled) {
+            setMigrationNotice({
+              tone: 'error',
+              text: `Could not move your ${guestEntries.length} guest ${
+                guestEntries.length === 1 ? 'entry' : 'entries'
+              } into the cloud vault. They are still saved on this device — sign out and back in to retry.`,
+            });
+          }
+        }
+      }
+
+      if (cancelled) return;
+
+      // Subscribe to Firestore entries for this authenticated user
+      unsubscribe = subscribeToUserEntries(
+        user.uid,
+        (cloudEntries) => {
+          setEntries(cloudEntries);
+        },
+        (err) => {
+          console.warn('Could not read Firestore entries:', err);
+        }
+      );
+    })();
+
+    return () => {
+      cancelled = true;
+      if (unsubscribe) unsubscribe();
+    };
   }, [user]);
 
   // Sync to local storage when guest
@@ -243,6 +287,26 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
+
+        {/* Guest vault migration result */}
+        {migrationNotice && (
+          <div
+            role="status"
+            className={`mb-6 p-3 border text-xs font-medium rounded-lg flex items-center justify-between gap-4 ${
+              migrationNotice.tone === 'success'
+                ? 'bg-[#EAF5EC] border-[#BCE1C2] text-[#14532D]'
+                : 'bg-rose-50 border-rose-200 text-rose-800'
+            }`}
+          >
+            <span>{migrationNotice.text}</span>
+            <button
+              onClick={() => setMigrationNotice(null)}
+              className="hover:underline cursor-pointer shrink-0"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
         
         {/* VIEW 1: Library & Book Club */}
         {activeTab === 'library' && (
