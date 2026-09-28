@@ -41,7 +41,14 @@ export interface Entry {
   sourceUrl?: string; // Direct link to podcast episode, article, video, or book
   coverUrl?: string;
   dateLogged: string;
-  rating: number; // 1 to 5
+  /**
+   * 1 to 5, or `0` meaning deliberately unrated.
+   *
+   * Goodreads uses 0 for "no rating given", and that is a meaningfully different
+   * statement from a 1-star review, so it is preserved rather than coerced.
+   * Use `isUnrated()` rather than testing the number directly.
+   */
+  rating: number;
   tags: string[];
   status: 'completed' | 'in-progress' | 'rereading';
   
@@ -58,6 +65,22 @@ export interface Entry {
   
   // AI-generated synthesis
   synthesis?: SynthesizedInsights;
+
+  // --- Fields owned by bulk import ---
+  // These are overwritten on re-import. Everything above is user-owned and must
+  // never be clobbered by an import (see IMPORT_OWNED_FIELDS).
+  isbn?: string;
+  goodreadsBookId?: string;
+  /** Verbatim "My Review" text from the export. Reference material, NOT a pillar. */
+  importedReview?: string;
+  /** Verbatim "Private Notes" text from the export. Reference material, NOT a pillar. */
+  importedNotes?: string;
+  importedAt?: string;
+}
+
+/** A rating of 0 means the user never rated the work, as distinct from rating it poorly. */
+export function isUnrated(rating: number): boolean {
+  return !rating || rating < 1;
 }
 
 export interface QueryRepositoryResult {

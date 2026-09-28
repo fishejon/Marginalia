@@ -194,8 +194,42 @@ app.post('/api/gemini/query-repository', async (req, res) => {
       return res.status(503).json({ error: 'AI unavailable', message: MISSING_KEY_MESSAGE });
     }
 
+    /*
+     * Only entries with actual content are worth sending to the model.
+     *
+     * Bulk import can add hundreds of books whose pillars are deliberately blank. Those
+     * contribute nothing but tokens, and at a few hundred entries they would dominate
+     * the prompt, inflating latency and cost and risking the context limit. Filtering
+     * here keeps consultation quality tied to what the user has actually reflected on.
+     */
+    const substantiveItems = libraryItems.filter((item: any) => {
+      return Boolean(
+        (item.whatImThinking || '').trim() ||
+          (item.whyILikedIt || '').trim() ||
+          (item.howIllUseItGoingForward || '').trim() ||
+          item.synthesis ||
+          (Array.isArray(item.quotes) && item.quotes.length > 0) ||
+          (Array.isArray(item.clubDiscussion) && item.clubDiscussion.length > 0)
+      );
+    });
+
+    if (substantiveItems.length === 0) {
+      return res.json({
+        answer:
+          'Your library does not have any reflections to draw on yet. Open a book in the ' +
+'Reflection Studio and record what you thought about it, then ask again — this ' +
+          'feature answers from your own notes rather than from general knowledge.',
+        consultationSummary: 'No reflections recorded yet.',
+        citedEntries: [],
+        suggestedNextSteps: [
+          'Open any book in the Reflection Studio and fill in the three pillars.',
+          'Run AI Synthesize on a book you have already reflected on.',
+        ],
+      });
+    }
+
     // Build library digest for context
-    const repositoryContext = libraryItems.map((item: any, idx: number) => {
+    const repositoryContext = substantiveItems.map((item: any, idx: number) => {
       const syn = item.synthesis;
       return `--- Entry #${idx + 1}: "${item.title}" by ${item.author} (${item.medium}) ---
 Tags: ${(item.tags || []).join(', ')}
@@ -544,6 +578,77 @@ Return JSON.`;
   } catch (error: any) {
     console.error('Error fetching source from URL:', error);
     return res.status(500).json({ error: 'Failed to fetch source from URL', message: error?.message });
+  }
+});
+
+/**
+ * Endpoint 4C: Bulk cover resolution for imported books.
+ *
+ * Only for rows with no ISBN. Anything with an ISBN gets an Open Library cover URL
+ * built client-side with no network call at all, which is what keeps a several-hundred
+ * book import off this code path entirely.
+ *
+ * Unauthenticated Google Books throttles at roughly 100 requests/minute and returns
+ * 429 aggressively, so requests are issued with small bounded concurrency and the whole
+ * endpoint degrades to "no cover" rather than failing the import.
+ */
+app.post('/api/covers/resolve', async (req, res) => {
+  try {
+    const { books = [] } = req.body as {
+      books?: Array<{ id: string; title: string; author?: string }>;
+    };
+
+    if (!Array.isArray(books) || books.length === 0) {
+      return res.json({ covers: {} });
+    }
+
+    // Hard cap per request. The client chunks anything larger.
+    const MAX_PER_REQUEST = 40;
+    const CONCURRENCY = 3;
+
+    if (books.length > MAX_PER_REQUEST) {
+      return res.status(413).json({
+        error: 'Too many books in one request',
+        message: `Send at most ${MAX_PER_REQUEST} books per request.`,
+      });
+    }
+
+    const covers: Record<string, string> = {};
+    let rateLimited = false;
+    const queue = [...books];
+
+    async function worker() {
+      while (queue.length > 0) {
+        // Once Google starts refusing, stop hammering it for the rest of the batch.
+        if (rateLimited) return;
+
+        const book = queue.shift();
+        if (!book?.title) continue;
+
+        try {
+          const url = await fetchCoverThumbnail(book.title, book.author);
+          if (url) covers[book.id] = url;
+        } catch (err: any) {
+          if (String(err?.message || '').includes('429')) {
+            rateLimited = true;
+            return;
+          }
+          // A single miss is not worth failing the batch over.
+        }
+      }
+    }
+
+    await Promise.all(Array.from({ length: CONCURRENCY }, () => worker()));
+
+    return res.json({
+      covers,
+      // Surfaced so the client can stop sending further chunks.
+      rateLimited,
+    });
+  } catch (error: any) {
+    console.error('Error resolving covers:', error);
+    // Covers are cosmetic; never let this fail an import.
+    return res.json({ covers: {}, rateLimited: false });
   }
 });
 
