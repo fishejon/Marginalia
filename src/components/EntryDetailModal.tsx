@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { X, BookOpen, Star, Sparkles, MessageSquare, Quote, CheckCircle2, Edit3, Trash2, ArrowUpRight, Share2 } from 'lucide-react';
-import { Entry } from '../types';
+import { Entry, isUnrated } from '../types';
 
 interface EntryDetailModalProps {
   entry: Entry | null;
@@ -38,10 +38,14 @@ export const EntryDetailModal: React.FC<EntryDetailModalProps> = ({
             <span aria-hidden="true">·</span>
             <span>{formattedDate}</span>
             <span aria-hidden="true">·</span>
-            <span className="flex items-center gap-1 font-mono text-stone-900 font-bold">
-              <Star className="w-3 h-3 fill-amber-500 text-amber-500" />
-              {entry.rating} / 5
-            </span>
+            {isUnrated(entry.rating) ? (
+              <span className="font-sans text-stone-500 italic">Unrated</span>
+            ) : (
+              <span className="flex items-center gap-1 font-mono text-stone-900 font-bold">
+                <Star className="w-3 h-3 fill-amber-500 text-amber-500" />
+                {entry.rating} / 5
+              </span>
+            )}
           </div>
 
           <div className="flex items-center gap-2">
@@ -222,6 +226,45 @@ export const EntryDetailModal: React.FC<EntryDetailModalProps> = ({
                   {entry.howIllUseItGoingForward || 'No operational actions recorded yet.'}
                 </p>
               </div>
+
+              {/*
+                Imported material is shown below the pillars and visually separated, so it
+                reads as reference rather than as reflection the user actually wrote here.
+              */}
+              {(entry.importedReview || entry.importedNotes) && (
+                <div className="pt-4 border-t border-dashed border-[#DDD6C8] space-y-4">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs uppercase tracking-widest text-stone-400 font-mono font-bold">
+                      Imported from Goodreads
+                    </span>
+                    <span className="text-[11px] text-stone-400 font-sans italic">
+                      reference only — not part of your reflections
+                    </span>
+                  </div>
+
+                  {entry.importedReview && (
+                    <div className="p-4 rounded-xl border border-[#EDE7DC] bg-white">
+                      <span className="text-[11px] uppercase tracking-wider text-stone-400 font-mono block mb-1">
+                        Your original review
+                      </span>
+                      <p className="text-sm font-serif text-stone-700 leading-relaxed whitespace-pre-line">
+                        {entry.importedReview}
+                      </p>
+                    </div>
+                  )}
+
+                  {entry.importedNotes && (
+                    <div className="p-4 rounded-xl border border-[#EDE7DC] bg-white">
+                      <span className="text-[11px] uppercase tracking-wider text-stone-400 font-mono block mb-1">
+                        Your private notes
+                      </span>
+                      <p className="text-sm font-serif text-stone-700 leading-relaxed whitespace-pre-line">
+                        {entry.importedNotes}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 

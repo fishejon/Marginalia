@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Sparkles, MessageSquare, Mic, BookOpen, Quote, CheckCircle2, ChevronRight, ArrowLeft, Loader2, Save, Plus, Trash2, ExternalLink, Bot } from 'lucide-react';
-import { Entry, ClubDiscussionQA, QuoteItem } from '../types';
+import { Entry, ClubDiscussionQA, QuoteItem, isUnrated } from '../types';
 import { SpeechToTextButton } from './SpeechToTextButton';
 import { SocraticChatPanel } from './SocraticChatPanel';
 import { fetchReflectionPrompts, synthesizeEntryInsights } from '../utils/api';
@@ -265,7 +265,7 @@ export const ClubReflectionStudio: React.FC<ClubReflectionStudioProps> = ({
               <span aria-hidden="true">·</span>
               <span>Logged on {entry.dateLogged}</span>
               <span aria-hidden="true">·</span>
-              <span>{entry.rating} / 5 Stars</span>
+              <span>{isUnrated(entry.rating) ? 'Unrated' : `${entry.rating} / 5 Stars`}</span>
             </div>
             <h2 className="text-xl sm:text-2xl font-serif font-semibold text-stone-900">
               {entry.title}

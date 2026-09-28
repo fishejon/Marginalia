@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, Sparkles, User, LogOut, LogIn } from 'lucide-react';
+import { Plus, Sparkles, User, LogOut, LogIn, Upload } from 'lucide-react';
 import { User as FirebaseUser } from 'firebase/auth';
 
 export type ActiveTab = 'library' | 'reflection' | 'consult' | 'playbook';
@@ -10,6 +10,7 @@ interface HeaderProps {
   onOpenNewModal: () => void;
   onOpenConsult: () => void;
   onOpenSmartRecs?: () => void;
+  onOpenImport?: () => void;
   entryCount: number;
   user: FirebaseUser | null;
   onOpenAuth: () => void;
@@ -22,6 +23,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenNewModal,
   onOpenConsult,
   onOpenSmartRecs,
+  onOpenImport,
   entryCount,
   user,
   onOpenAuth,
@@ -102,6 +104,18 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Zone 3: 1-2 primary actions & User Profile */}
         <div className="flex items-center gap-2.5">
+          {onOpenImport && (
+            <button
+              onClick={onOpenImport}
+              title="Import your reading history from a Goodreads export"
+              aria-label="Import reading history"
+              className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-stone-700 hover:text-stone-950 hover:bg-[#F2ECE1] rounded-md transition-colors cursor-pointer"
+            >
+              <Upload className="w-3.5 h-3.5" />
+              <span className="hidden lg:inline">Import</span>
+            </button>
+          )}
+
           {onOpenSmartRecs && (
             <button
               onClick={onOpenSmartRecs}

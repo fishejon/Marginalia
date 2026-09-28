@@ -19,7 +19,7 @@ import {
   Maximize2,
   Volume2,
 } from 'lucide-react';
-import { Entry, MediumType } from '../types';
+import { Entry, MediumType, isUnrated } from '../types';
 
 interface VirtualBookshelfProps {
   entries: Entry[];
@@ -556,10 +556,12 @@ export const VirtualBookshelf: React.FC<VirtualBookshelfProps> = ({
                                 <span className="text-[9px] font-sans font-medium tracking-tight text-white/90 truncate max-w-full text-center drop-shadow-[0_1px_1px_rgba(0,0,0,0.9)]">
                                   {item.author.split(' ').pop()}
                                 </span>
-                                <div className="mt-1 flex items-center gap-0.5 text-amber-300">
-                                  <Star className="w-2 h-2 fill-amber-400 text-amber-400" />
-                                  <span className="text-[8px] font-mono font-bold">{item.rating}</span>
-                                </div>
+                                {!isUnrated(item.rating) && (
+                                  <div className="mt-1 flex items-center gap-0.5 text-amber-300">
+                                    <Star className="w-2 h-2 fill-amber-400 text-amber-400" />
+                                    <span className="text-[8px] font-mono font-bold">{item.rating}</span>
+                                  </div>
+                                )}
                               </div>
 
                               {/* Bottom Tailband */}
@@ -633,7 +635,7 @@ export const VirtualBookshelf: React.FC<VirtualBookshelfProps> = ({
                                     {item.medium}
                                   </span>
                                   <span className="text-[9px] font-mono text-amber-400 font-bold">
-                                    ★ {item.rating}
+                                    {isUnrated(item.rating) ? '—' : `★ ${item.rating}`}
                                   </span>
                                 </div>
                                 <div>
@@ -762,10 +764,14 @@ export const VirtualBookshelf: React.FC<VirtualBookshelfProps> = ({
                   {activeHoverEntry.medium}
                 </span>
                 <span aria-hidden="true">·</span>
-                <span className="flex items-center gap-1 font-mono text-amber-600 font-bold">
-                  <Star className="w-3 h-3 fill-amber-500 text-amber-500" />
-                  {activeHoverEntry.rating}/5
-                </span>
+                {isUnrated(activeHoverEntry.rating) ? (
+                  <span className="italic text-stone-500">Unrated</span>
+                ) : (
+                  <span className="flex items-center gap-1 font-mono text-amber-600 font-bold">
+                    <Star className="w-3 h-3 fill-amber-500 text-amber-500" />
+                    {activeHoverEntry.rating}/5
+                  </span>
+                )}
                 {activeHoverEntry.tags && activeHoverEntry.tags.length > 0 && (
                   <>
                     <span aria-hidden="true">·</span>

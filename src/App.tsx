@@ -7,7 +7,9 @@ import {
   removeUserEntry,
   loadSampleCanonToFirestore,
   migrateGuestEntriesToCloud,
+  bulkUpsertEntries,
 } from './utils/firestoreService';
+import { mergeImportedEntries } from './utils/goodreadsImport';
 import {
   loadEntries,
   saveEntries,
@@ -16,7 +18,7 @@ import {
   exportEntriesAsJson,
 } from './utils/storage';
 import { INITIAL_ENTRIES } from './data/initialEntries';
-import { Entry, MediumType } from './types';
+import { Entry, MediumType, isUnrated } from './types';
 import { Header, ActiveTab } from './components/Header';
 import { HeroBanner } from './components/HeroBanner';
 import { EntryCard } from './components/EntryCard';
@@ -29,6 +31,7 @@ import { RecommendationGeneratorModal } from './components/RecommendationGenerat
 import { AuthModal } from './components/AuthModal';
 import { VirtualBookshelf } from './components/VirtualBookshelf';
 import { SmartRecommendationsModal } from './components/SmartRecommendationsModal';
+import { ImportModal } from './components/ImportModal';
 import {
   Search,
   BookOpen,
@@ -49,6 +52,7 @@ export default function App() {
   const [authLoading, setAuthLoading] = useState(true);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isSmartRecsOpen, setIsSmartRecsOpen] = useState(false);
+  const [isImportOpen, setIsImportOpen] = useState(false);
   const [migrationNotice, setMigrationNotice] = useState<
     { tone: 'success' | 'error'; text: string } | null
   >(null);
@@ -218,6 +222,31 @@ export default function App() {
     setEntries(loadEntries());
   };
 
+  /**
+   * Persists a parsed Goodreads import.
+   *
+   * Both branches route through merge logic that only writes import-owned fields for
+   * books already in the vault, so re-importing never destroys reflection work.
+   */
+  const handleImportEntries = async (
+    imported: Entry[],
+    onProgress: (written: number, total: number) => void
+  ) => {
+    if (user) {
+      const existingIds = new Set(entries.map((e) => e.id));
+      await bulkUpsertEntries(user.uid, imported, existingIds, ({ written, total }) =>
+        onProgress(written, total)
+      );
+      // The Firestore subscription pushes the new state back down; no local set needed.
+      return;
+    }
+
+    const { merged } = mergeImportedEntries(entries, imported);
+    setEntries(merged);
+    saveEntries(merged);
+    onProgress(imported.length, imported.length);
+  };
+
   // Filtered entries for the Library Vault view
   const filteredEntries = entries
     .filter((entry) => {
@@ -262,7 +291,10 @@ export default function App() {
         return new Date(b.dateLogged).getTime() - new Date(a.dateLogged).getTime();
       }
       if (sortBy === 'rating') {
-        return b.rating - a.rating;
+        // Unrated books sort last rather than masquerading as the worst-rated.
+        const ar = isUnrated(a.rating) ? -1 : a.rating;
+        const br = isUnrated(b.rating) ? -1 : b.rating;
+        return br - ar;
       }
       if (sortBy === 'title') {
         return a.title.localeCompare(b.title);
@@ -279,6 +311,7 @@ export default function App() {
         onOpenNewModal={() => setIsNewModalOpen(true)}
         onOpenConsult={() => setActiveTab('consult')}
         onOpenSmartRecs={() => setIsSmartRecsOpen(true)}
+        onOpenImport={() => setIsImportOpen(true)}
         entryCount={entries.length}
         user={user}
         onOpenAuth={() => setIsAuthModalOpen(true)}
@@ -705,6 +738,14 @@ export default function App() {
         onClose={() => setIsSmartRecsOpen(false)}
         entries={entries}
         onAddEntryToVault={(newEntry) => handleAddEntry(newEntry)}
+      />
+
+      <ImportModal
+        isOpen={isImportOpen}
+        onClose={() => setIsImportOpen(false)}
+        existingEntries={entries}
+        onImport={handleImportEntries}
+        isSignedIn={Boolean(user)}
       />
     </div>
   );
