@@ -33,6 +33,7 @@ export const SocraticChatPanel: React.FC<SocraticChatPanelProps> = ({
   const [loading, setLoading] = useState(false);
   const [distilling, setDistilling] = useState(false);
   const [distilledNotification, setDistilledNotification] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -52,6 +53,7 @@ export const SocraticChatPanel: React.FC<SocraticChatPanelProps> = ({
     setMessages(newMessages);
     setInputVal('');
     setLoading(true);
+    setError(null);
 
     try {
       const res = await sendSocraticChatMessage({
@@ -63,14 +65,11 @@ export const SocraticChatPanel: React.FC<SocraticChatPanelProps> = ({
 
       setMessages((prev) => [...prev, { role: 'model', content: res.reply }]);
     } catch (err: any) {
+      // Deliberately not injecting a canned "model" reply here: a fabricated turn is
+      // indistinguishable from a real one and quietly corrupts the dialogue transcript
+      // that later gets distilled into the user's pillars.
       console.error('Socratic chat turn failed:', err);
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: 'model',
-          content: 'I had trouble processing that turn. What is the fundamental principle here that you feel most strongly about?',
-        },
-      ]);
+      setError(err?.message || 'The Socratic partner could not respond. Try sending that again.');
     } finally {
       setLoading(false);
     }
@@ -83,6 +82,7 @@ export const SocraticChatPanel: React.FC<SocraticChatPanelProps> = ({
   const handleDistillPillars = async () => {
     if (messages.length < 2) return;
     setDistilling(true);
+    setError(null);
     try {
       const pillars = await extractPillarsFromSocraticChat({
         messages,
@@ -95,9 +95,9 @@ export const SocraticChatPanel: React.FC<SocraticChatPanelProps> = ({
         setDistilledNotification(true);
         setTimeout(() => setDistilledNotification(false), 4000);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert('Could not distill conversation. Try chatting a bit more first.');
+      setError(err?.message || 'Could not distill the conversation. Try chatting a bit more first.');
     } finally {
       setDistilling(false);
     }
@@ -141,6 +141,21 @@ export const SocraticChatPanel: React.FC<SocraticChatPanelProps> = ({
         <div className="bg-[#EAF5EC] border-b border-[#BCE1C2] px-4 py-2 text-xs text-[#14532D] font-medium flex items-center gap-1.5 animate-in fade-in">
           <CheckCircle2 className="w-3.5 h-3.5 text-[#14532D]" />
           <span>Extracted insights and populated your 3 core reflection pillars!</span>
+        </div>
+      )}
+
+      {error && (
+        <div
+          role="alert"
+          className="bg-rose-50 border-b border-rose-200 px-4 py-2 text-xs text-rose-800 font-medium flex items-start justify-between gap-3"
+        >
+          <span>{error}</span>
+          <button
+            onClick={() => setError(null)}
+            className="hover:underline cursor-pointer shrink-0"
+          >
+            Dismiss
+          </button>
         </div>
       )}
 

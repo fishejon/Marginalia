@@ -29,6 +29,14 @@ export function saveEntries(entries: Entry[]): void {
   }
 }
 
+export function clearLocalEntries(): void {
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch (err) {
+    console.error('Failed to clear local entries:', err);
+  }
+}
+
 export function resetToDemoEntries(): Entry[] {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(INITIAL_ENTRIES));

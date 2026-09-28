@@ -22,9 +22,11 @@ export const SmartRecommendationsModal: React.FC<SmartRecommendationsModalProps>
   const [loading, setLoading] = useState(false);
   const [customInquiry, setCustomInquiry] = useState('');
   const [addedIds, setAddedIds] = useState<Set<string>>(new Set());
+  const [error, setError] = useState<string | null>(null);
 
   const loadRecommendations = async (inquiryText?: string) => {
     setLoading(true);
+    setError(null);
     try {
       const res = await fetchSmartRecommendations({
         userVaultEntries: entries,
@@ -36,6 +38,7 @@ export const SmartRecommendationsModal: React.FC<SmartRecommendationsModalProps>
       setGroundingSources(res.groundingSources || []);
     } catch (err: any) {
       console.error('Failed to load smart recommendations:', err);
+      setError(err?.message || 'Could not load recommendations. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -126,6 +129,15 @@ export const SmartRecommendationsModal: React.FC<SmartRecommendationsModalProps>
 
         {/* Body */}
         <div className="p-6 overflow-y-auto flex-1 space-y-6">
+          {error && (
+            <div
+              role="alert"
+              className="p-3 bg-rose-50 border border-rose-200 text-rose-800 text-xs rounded-lg"
+            >
+              {error}
+            </div>
+          )}
+
           {/* Synthesis Note */}
           {shelfSynthesis && !loading && (
             <div className="p-4 rounded-xl bg-[#F8F5EE] border border-[#E7E2D8] text-xs font-serif italic text-stone-800 leading-relaxed">
