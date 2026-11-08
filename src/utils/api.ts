@@ -150,6 +150,34 @@ export async function extractPillarsFromSocraticChat(data: {
   return res.json();
 }
 
+/**
+ * Resolves covers for imported books that have no ISBN.
+ *
+ * Books with an ISBN never reach here — their cover URL is built directly from Open
+ * Library at zero cost. This is the fallback for the remainder, and it is deliberately
+ * best-effort: covers are cosmetic and must never block or fail an import.
+ *
+ * Returns a map of entry id to cover URL, plus whether the server hit a rate limit and
+ * the caller should stop sending further chunks.
+ */
+export async function resolveCovers(
+  books: Array<{ id: string; title: string; author?: string }>
+): Promise<{ covers: Record<string, string>; rateLimited: boolean }> {
+  try {
+    const res = await fetch('/api/covers/resolve', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ books }),
+    });
+
+    if (!res.ok) return { covers: {}, rateLimited: false };
+    return await res.json();
+  } catch (err) {
+    console.warn('Cover resolution failed; continuing without covers:', err);
+    return { covers: {}, rateLimited: false };
+  }
+}
+
 export async function fetchSmartRecommendations(data: {
   userVaultEntries: Entry[];
   query?: string;

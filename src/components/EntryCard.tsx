@@ -1,6 +1,6 @@
 import React from 'react';
 import { Book, Headphones, FileText, Star, MessageSquare, ArrowUpRight, Sparkles } from 'lucide-react';
-import { Entry } from '../types';
+import { Entry, isUnrated } from '../types';
 
 interface EntryCardProps {
   entry: Entry;
@@ -64,11 +64,13 @@ export const EntryCard: React.FC<EntryCardProps> = ({ entry, onSelect, onReflect
             <span className="capitalize">{entry.medium}</span>
           </div>
 
-          {/* Rating */}
-          <div className="absolute top-3 right-3 flex items-center gap-0.5 px-2 py-1 bg-white/90 backdrop-blur-xs rounded text-[11px] font-mono text-stone-800 shadow-xs">
-            <Star className="w-3 h-3 fill-amber-500 text-amber-500" />
-            <span className="font-bold">{entry.rating}</span>
-          </div>
+          {/* Rating — omitted entirely when the book was never rated. */}
+          {!isUnrated(entry.rating) && (
+            <div className="absolute top-3 right-3 flex items-center gap-0.5 px-2 py-1 bg-white/90 backdrop-blur-xs rounded text-[11px] font-mono text-stone-800 shadow-xs">
+              <Star className="w-3 h-3 fill-amber-500 text-amber-500" />
+              <span className="font-bold">{entry.rating}</span>
+            </div>
+          )}
         </div>
 
         {/* Content body */}

@@ -11,6 +11,7 @@ import {
 import { db } from '../firebase';
 import { Entry } from '../types';
 import { INITIAL_ENTRIES } from '../data/initialEntries';
+import { IMPORT_OWNED_FIELDS } from './goodreadsImport';
 
 export function subscribeToUserEntries(
   userId: string,
@@ -79,6 +80,65 @@ export async function migrateGuestEntriesToCloud(
   }
 
   return guestEntries.length;
+}
+
+/**
+ * Firestore rejects `undefined` field values outright. Parsed entries legitimately
+ * carry undefined for optional columns (no ISBN, no review), so they must be removed
+ * rather than written.
+ */
+function stripUndefined<T extends Record<string, unknown>>(obj: T): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (v !== undefined) out[k] = v;
+  }
+  return out;
+}
+
+export interface BulkUpsertProgress {
+  written: number;
+  total: number;
+}
+
+/**
+ * Writes imported entries to the user's vault in chunked batches.
+ *
+ * For entries already present, only `IMPORT_OWNED_FIELDS` are written. This is the
+ * safeguard that stops a re-import from overwriting pillars, synthesis, quotes or
+ * club discussion the user has written since the previous import. New entries are
+ * written in full.
+ */
+export async function bulkUpsertEntries(
+  userId: string,
+  entries: Entry[],
+  existingIds: Set<string>,
+  onProgress?: (progress: BulkUpsertProgress) => void
+): Promise<void> {
+  if (entries.length === 0) return;
+
+  for (let i = 0; i < entries.length; i += BATCH_WRITE_LIMIT) {
+    const chunk = entries.slice(i, i + BATCH_WRITE_LIMIT);
+    const batch = writeBatch(db);
+
+    chunk.forEach((entry) => {
+      const docRef = doc(db, 'users', userId, 'entries', entry.id);
+
+      if (existingIds.has(entry.id)) {
+        // Narrow the write to import-owned fields only.
+        const partial: Record<string, unknown> = { userId };
+        for (const key of IMPORT_OWNED_FIELDS) {
+          const value = entry[key];
+          if (value !== undefined) partial[key] = value;
+        }
+        batch.set(docRef, partial, { merge: true });
+      } else {
+        batch.set(docRef, stripUndefined({ ...entry, userId }), { merge: true });
+      }
+    });
+
+    await batch.commit();
+    onProgress?.({ written: Math.min(i + chunk.length, entries.length), total: entries.length });
+  }
 }
 
 export async function loadSampleCanonToFirestore(userId: string): Promise<void> {
